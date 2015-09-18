@@ -1,0 +1,2174 @@
+<?php
+
+//todo: везде использовать db_select;
+//todo: добавить комментарии;
+
+// добавление полей в словарь таксономии, хранящий каталоги товаров;
+function coupon_add_taxonomy_field($vid) {
+  
+  $field_name = 'coupon_data';
+  $label      = t('Служебное поле: данные купонов');
+  
+  $vocabulary = taxonomy_vocabulary_load($vid);
+  
+  if (!$vocabulary) {
+    return;
+  }
+  
+  $bundle = $vocabulary->machine_name;
+  
+  // Only add the instance if it doesn't exist. Don't overwrite any changes.
+  $instance = field_info_instance('taxonomy_term', $field_name, $bundle);
+  if ($instance) {
+    return;
+  }
+  
+  // Attach the field to our taxonomy entity
+  $instance = array(
+    'field_name' => $field_name,
+    'entity_type' => 'taxonomy_term',
+    'bundle' => $bundle,
+    'label' => $label,
+    'widget' => array(
+      'type' => 'text',
+      'weight' => 1
+    )
+  );
+  
+  field_create_instance($instance);
+}
+
+// добавление полей в ноды, являющимися товарами ubercart;
+function coupon_add_fields() {
+  
+  $info = field_info_field_types('list_tex1t');
+  
+  $node_types = uc_product_types();
+  
+  //
+  $options = array(
+    'type' => 'text',
+    'label' => t('Служебное поле: акции, в которых участвует товар'),
+    'settings' => 0,
+    'weight' => 1,
+    'widget' => array(
+      'type' => 'text',
+      'weight' => 1
+    ),
+    'cardinality' => FIELD_CARDINALITY_UNLIMITED
+  );
+  coupon_add_field('coupon_actions', $options, $node_types);
+  
+  //
+  $options = array(
+    'type' => 'text_long',
+    'label' => t('Служебное поле: данные купонов'),
+    'settings' => 0,
+    'weight' => 1,
+    'widget' => array(
+      'type' => 'text',
+      'weight' => 1
+    ),
+    'cardinality' => 1
+  );
+  coupon_add_field('coupon_data', $options, $node_types);
+}
+
+function coupon_add_field($field_name, $options, $node_types) {
+  
+  $label       = $options['label'];
+  $type        = $options['type'];
+  $settings    = $options['settings'];
+  $weight      = $options['weight'];
+  $widget      = $options['widget'];
+  $cardinality = $options['cardinality'];
+  
+  $field = field_info_field($field_name, $label);
+  
+  // Set up field if it doesn't exist.
+  if (!$field) {
+    $field = array(
+      'field_name' => $field_name,
+      'type' => $type,
+      'cardinality' => $cardinality
+    );
+    
+    if ($settings) {
+      $field['settings'] = $settings;
+    }
+    
+    field_create_field($field);
+    
+    // Initialize this because field_info_field() would have set it.
+    $field['bundles'] = array();
+  }
+  
+  $new_instance = array(
+    'entity_type' => 'node',
+    'label' => $label,
+    'weight' => $weight,
+    'widget' => $widget,
+    'display' => array()
+  );
+  
+  foreach ($node_types as $node_type) {
+    
+    $new_instance['bundle'] = $node_type;
+    
+    $new_instance['field_name'] = $field_name;
+    
+    $instance = field_info_instance('node', $field_name, $node_type);
+    
+    // Only add the instance if it doesn't exist. Don't overwrite any changes.
+    if (!$instance) {
+      field_create_instance($new_instance);
+    }
+  }
+}
+
+function coupon_menu() {
+  
+  $items['action-products'] = array(
+    'page callback' => 'coupon_action_products',
+    'access callback' => TRUE,
+    'type' => MENU_NORMAL_ITEM
+  );
+  
+  $items['action-products/%'] = array(
+    'page callback' => 'coupon_catalog',
+    'access callback' => TRUE,
+    'type' => MENU_NORMAL_ITEM
+  );
+  
+  // блок на странице системных настроек;
+  $items['admin/config/coupon'] = array(
+    'title' => 'Покупка товаров по купонам',
+    //'description' => 'Your description', 
+    'position' => 'left',
+    'page callback' => 'system_admin_menu_block_page',
+    'access arguments' => array(
+      'administer site configuration'
+    ),
+    'file' => 'system.admin.inc',
+    'file path' => drupal_get_path('module', 'system'),
+    'weight' => -100
+  );
+  
+  //
+  $items['admin/config/coupon/settings'] = array(
+    'title' => 'Настройки',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array(
+      'coupon_settings'
+    ),
+    'access arguments' => array(
+      'administer site configuration'
+    ),
+    'type' => MENU_NORMAL_ITEM
+  );
+  
+  $items['admin/config/coupon/discounts'] = array(
+    'title' => 'Скидки по купонам',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array(
+      'coupon_discount'
+    ),
+    'access arguments' => array(
+      'manage coupon actions'
+    ),
+    'type' => MENU_NORMAL_ITEM
+  );
+  
+  $items['coupon_discount_data'] = array(
+    'page callback' => 'coupon_discount_data',
+    'access arguments' => array(
+      'manage coupon actions'
+    ),
+    'type' => MENU_CALLBACK
+  );
+  
+  $items['coupon_discount_save'] = array(
+    'page callback' => 'coupon_discount_save',
+    'access arguments' => array(
+      'manage coupon actions'
+    ),
+    'type' => MENU_CALLBACK
+  );
+  
+  
+  $items['coupon_catalog_options/%'] = array(
+    'page callback' => 'coupon_catalog_options',
+    'page arguments' => array(
+      1
+    ),
+    'access arguments' => array(
+      'manage coupon actions'
+    ),
+    'type' => MENU_CALLBACK
+  );
+  
+  return $items;
+}
+
+function coupon_permission() {
+  return array(
+    'manage coupon actions' => array(
+      'title' => t('Управление акциями и скидками')
+    )
+  );
+}
+
+// форма настроек сайта;
+function coupon_settings() {
+  //todo: префикс каталогов;
+  
+  // получить список способов отображения, общий для всех типов материала,
+  // являющихся товаром ubercart;
+  $node_types = uc_product_types();
+  $modes      = array();
+  foreach ($node_types as $node_type) {
+    $entity_info = entity_get_info('node');
+    $modes[]     = array_keys($entity_info['view modes']);
+  }
+  $modes = call_user_func_array('array_intersect', $modes);
+  
+  $modes_indexed = array();
+  foreach ($modes as $mode) {
+    $modes_indexed[$mode] = $mode;
+  }
+  
+  $default_mode = variable_get('coupon_view_mode');
+  if (!$default_mode && isset($modes_indexed['teaser'])) {
+    variable_set('coupon_view_mode', 'teaser');
+  }
+  
+  //
+  $items        = taxonomy_get_vocabularies();
+  $vocabularies = array(
+    0 => 'Словарь отсутствует'
+  );
+  foreach ($items as $item) {
+    $vocabularies[$item->vid] = $item->name;
+  }
+  
+  $form = array();
+
+  $form['coupon_login'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Логин в системе учета купонов'),
+    '#default_value' => variable_get('coupon_login'),
+  );
+
+  $form['coupon_pass'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Пароль в системе учета купонов'),
+    '#default_value' => variable_get('coupon_pass'),
+  );
+
+  $form['coupon_view_mode'] = array(
+    '#type' => 'select',
+    '#title' => t('Способ отображения акционных товаров'),
+    '#options' => $modes_indexed,
+    '#default_value' => variable_get('coupon_view_mode')
+  );
+  
+  $form['coupon_catalog_vocabulary'] = array(
+    '#type' => 'select',
+    '#title' => t('Словарь таксономии, содержащий каталоги товаров'),
+    '#options' => $vocabularies,
+    '#default_value' => variable_get('coupon_catalog_vocabulary'),
+    '#description' => 'После смены словаря не забудьте перенастроить скидки по действующим акциям'
+  );
+  
+  $form['coupon_catalog_field'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Поле товара, содержащее ссылку на каталог товаров'),
+    '#default_value' => variable_get('coupon_catalog_field'),
+    '#description' => 'После смены этого параметра не забудьте перенастроить скидки по действующим акциям'
+  );
+  
+  $form['coupon_goods_per_page'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Макс. кол-во товаров на странице каталога'),
+    '#default_value' => variable_get('coupon_goods_per_page', 20)
+  );
+  
+  $form['coupon_info_title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Заголовок диалога "Информация о скидочной программе"'),
+    '#default_value' => variable_get('coupon_info_title', 'Информация о скидочной программе')
+  );
+  
+  $form['coupon_info'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Информация о скидочной программе'),
+    '#default_value' => variable_get('coupon_info', '')
+  );
+  
+  $form['#submit'] = array(
+    'coupon_settings_submit'
+  );
+  
+  return system_settings_form($form);
+}
+
+function coupon_settings_submit($form, &$form_state) {
+  
+  $vid = $form_state['input']['coupon_catalog_vocabulary'];
+  if ($vid) {
+    coupon_add_taxonomy_field($vid);
+  }
+  
+  coupon_recalc_catalogs();
+}
+
+function coupon_get_catalog_action_good_alias($tid, $prefix) {
+  
+  $path  = 'taxonomy/term/' . $tid;
+  $alias = drupal_get_path_alias($path);
+  
+  if (strpos($alias, 'taxonomy/term/') === 0) {
+    
+    $alias = $tid;
+  }
+  else {
+    
+    if ($prefix) {
+      
+      $prefix = '/' . $prefix . '\//';
+      $alias  = preg_replace($prefix, '', $alias, 1);
+    }
+  }
+  
+  $alias = 'action-products/' . $alias;
+  
+  return $alias;
+}
+
+/**
+ *
+ */
+function coupon_get_current_action($check_schedule = 0) {
+  
+  $short_time  = time();
+  $day_of_week = date('w', $short_time);
+  $hour        = date('G', $short_time);
+  $time        = $short_time * 1000;
+  $periods     = variable_get('coupon_options_periods', array());
+  
+  foreach ($periods as $period) {
+    if ($time >= $period['from'] && $time <= ($period['to'] + 86400000)) {
+      
+      $rule = variable_get('price_rule' . $period['id']);
+      if (!$check_schedule) {
+        return $rule;
+      }
+      
+      $rule = variable_get('price_rule' . $period['id']);
+      $day  = $rule['days'][$day_of_week];
+      if ($day->enabled && $day->hours[$hour]->enabled) {
+        return $rule;
+      }
+    }
+  }
+}
+
+// получить скидку для товара;
+function coupon_get_good_discount($rule, $tid, $raw_good_data) {
+  
+  $rule_id = $rule['id'];
+  
+  // get discount info from good's data;
+  $good_data = json_decode($raw_good_data, 1);
+  if (isset($good_data[$rule_id])) {
+    
+    if (!$good_data[$rule_id]) {
+      // no discount for this particular good;
+      return array(
+        'value' => 0
+      );
+    }
+    
+    if (isset($good_data[$rule_id]['t']) && isset($good_data[$rule_id]['v'])) {
+      
+      $type = $good_data[$rule_id]['t'];
+      if ($type == 'p') {
+        $type = 'percent';
+      }
+      else {
+        $type = 'sum';
+      }
+      
+      $value = $good_data[$rule_id]['v'];
+      $value = intval($value);
+      
+      return array(
+        'type' => $type,
+        'value' => $value
+      );
+    }
+  }
+  
+  // get discount info from catalog's data;
+  if (isset($rule['terms'][$tid])) {
+    
+    $options = $rule['terms'][$tid];
+    $type    = $options['discount_type'];
+    $val     = $options['discount_value'];
+    $val     = intval($val);
+    return array(
+      'type' => $type,
+      'value' => $value
+    );
+  }
+  
+  //todo: значения по умолчанию;
+  return array(
+    'value' => 0
+  );
+}
+
+function coupon_action_products($tid = 0) {
+  
+  $rule    = coupon_get_current_action(0, 1);
+  $rule_id = $rule['id'];
+  
+  //todo: в нвстройки;
+  $page_title = t('Акционные товары');
+  drupal_set_title($page_title);
+  
+  // крошки;
+  $breadcrumb   = array();
+  $breadcrumb[] = l(t('Главная'), '<front>');
+  
+  //todo:
+  $prefix = 'catalog';
+  
+  if (!$tid) {
+    $breadcrumb[] = $page_title;
+  }
+  else {
+    
+    $breadcrumb[] = l($page_title, '/action-products');
+    
+    $term    = taxonomy_term_load($tid);
+    $parents = taxonomy_get_parents($tid);
+    $path    = '';
+    
+    foreach ($parents as $parent) {
+      
+      $alias = coupon_get_catalog_action_good_alias($parent->tid, $prefix);
+      
+      //todo: catalog prefix;
+      $breadcrumb[] = l($parent->name, $alias);
+    }
+    $breadcrumb[] = $term->name;
+  }
+  
+  if (!$rule) {
+    
+    //todo: в настройки;
+    $markup = 'Сейчас нет доступных вам акций.';
+    drupal_set_breadcrumb($breadcrumb);
+    return $markup;
+  }
+  
+  $vid            = variable_get('coupon_catalog_vocabulary');
+  $vid            = intval($vid);
+  // todo: сейчас показываются товары, для которых указан размер скидки;
+  // учесть, что размер скидки может быть указан и для каталога;
+  $goods_per_page = variable_get('coupon_goods_per_page', 20);
+  //$structure = variable_get('coupon_structure', 'plain');
+  $view_mode      = variable_get('coupon_view_mode', 'teaser');
+  if (!$vid) {
+    $catalog_field = '';
+  }
+  else {
+    $catalog_field = variable_get('coupon_catalog_field');
+  }
+  
+  $node_types = uc_product_types();
+  
+  $query = db_select('node', 'n');
+  //->extend('PagerDefault');
+  
+  //$query = $query->extend('PagerDefault')->extend('TableSort');
+  $query = $query->extend('PagerDefault')->element(0)->extend('TableSort');
+  
+  $query->fields('n', array(
+    'nid'
+  ));
+  
+  if (!count($node_types)) {
+    return t('Не найдены материалы типа "товар"');
+  }
+  
+  // фильтр по каталогу;
+  if ($catalog_field && $tid) {
+    
+    $query->innerJoin('field_data_' . $catalog_field, 'c', 'c.entity_id = n.nid');
+    $query->condition('c.' . $catalog_field . '_tid', $tid, '=');
+  }
+  
+  // фильтр по акции;
+  $query->leftJoin('field_data_coupon_actions', 'd', 'd.entity_id = n.nid');
+  $query->condition('d.coupon_actions_value', $rule_id, '=');
+  
+  // фильтр по типу ноды;
+  if (count($node_types) == 1) {
+    
+    $node_type = $node_types[0];
+    $query->condition('n.type', $node_type, '=');
+  }
+  else {
+    
+    $or = db_or();
+    foreach ($node_types as $node_type) {
+      $or->condition('n.type', $node_type, '=');
+    }
+    $query->condition($or);
+  }
+  
+  $query->limit($goods_per_page);
+  
+  $nids  = array();
+  $found = 0;
+  foreach ($query->execute()->fetchCol() as $nid) {
+    
+    $found  = 1;
+    $nids[] = $nid;
+  }
+  
+  //$result = print_r( $nids, 1 );
+  if ($found) {
+    
+    $nodes = entity_load('node', $nids);
+    
+    $build  = node_view_multiple($nodes, $view_mode);
+    $markup = drupal_render($build);
+    $pager  = theme('pager', array(
+      'element' => 0
+    ));
+    $markup .= $pager;
+  }
+  else {
+    //todo: в нвстройки;
+    $markup = 'Ничего не найдено';
+  }
+  
+  if ($vid) {
+    
+    if ($tid) {
+      
+      // показать подкаталоги;
+      $children = taxonomy_get_children($tid);
+    }
+    else {
+      
+      // показать корневые каталоги;
+      $children = select_root_catalogs();
+    }
+    
+    $subcatalogs = '<div class="subcatalogs">';
+    foreach ($children as $child) {
+      
+      $alias = coupon_get_catalog_action_good_alias($child->tid, $prefix);
+      $subcatalogs .= '<div class="subcatalog">';
+      $subcatalogs .= '<a href="' . $alias . '">' . $child->name . '</a>';
+      $subcatalogs .= '</div>';
+    }
+    $subcatalogs .= '</div>';
+    $markup = $subcatalogs . $markup;
+  }
+  
+  $coupon_actions = variable_get('coupon_actions', '[]');
+  $coupon_actions = json_decode($coupon_actions);
+  if (is_array($coupon_actions) && isset($coupon_actions[$rule_id])) {
+    $descr  = '<div class="action-info">' . $coupon_actions[$rule_id]->descr . '</div>';
+    $markup = $descr . $markup;
+  }
+  
+  
+  drupal_set_breadcrumb($breadcrumb);
+  return $markup;
+}
+
+/**
+ * Страница "Акционные товары в каталоге";
+ * рассмотреть текущий путь и получить tid каталога;
+ * вывести товары с пом. coupon_action_products;
+ */
+function coupon_catalog() {
+  
+  $path = current_path();
+  $path = str_replace('action-products/', '', $path);
+  $tid  = intval($path);
+  
+  if ($tid) {
+    return coupon_action_products($tid);
+  }
+  
+  //todo: catalog prefix;
+  $prefix = 'catalog';
+  if ($prefix) {
+    $path = $prefix . '/' . $path;
+  }
+  
+  $query = db_select('url_alias', 'a');
+  $query->fields('a', array(
+    'source'
+  ));
+  $query->condition('a.alias', $path, '=');
+  
+  $res = $query->execute();
+  $row = $res->fetchAssoc();
+  
+  if (!$row) {
+    //drupal_not_found();
+    return MENU_NOT_FOUND;
+  }
+  
+  $path = $row['source'];
+  if (strpos($path, 'taxonomy/term/') !== 0) {
+    return MENU_NOT_FOUND;
+  }
+  
+  $tid = str_replace('taxonomy/term/', '', $path);
+  $tid = intval($tid);
+  
+  if (!$tid) {
+    return MENU_NOT_FOUND;
+  }
+  
+  return coupon_action_products($tid);
+  //return $tid;
+  //return '$tid == ' . $tid;
+}
+
+/**
+ * Implements hook_node_info().
+ */
+function coupon_node_info() {
+  
+  coupon_add_fields();
+  return array();
+}
+
+/**
+ * Пере
+ */
+function coupon_recalc_catalog($tid) {
+  //todo: рекурсивно пересчитать подкаталоги;
+}
+
+/**
+ * Обновить кеш наличия акционных товаров в каталогах;
+ * вызывается при:
+ * — сохранении настроек купонов;
+ * — сохранении формы скидок;
+ */
+function coupon_recalc_catalogs($tid = 0) {
+  
+  if ($tid) {
+    coupon_recalc_action_products_amount_for_catalog($tid);
+    return;
+  }
+  
+  $vid = variable_get('coupon_catalog_vocabulary');
+  if (!$vid) {
+    return;
+  }
+  
+  //todo: select anr recalc root catalogs;
+  $catalogs = select_root_catalogs();
+  foreach ($catalogs as $catalog) {
+    coupon_recalc_catalog($catalog);
+  }
+}
+
+/**
+ * Получить массив корневых каталогов;
+ */
+function select_root_catalogs() {
+  
+  $catalogs = array();
+  
+  $vid = variable_get('coupon_catalog_vocabulary');
+  if (!$vid) {
+    return $catalogs;
+  }
+  
+  $sql = 'SELECT d.tid,d.name
+      FROM
+        `taxonomy_term_data` d,
+        `taxonomy_term_hierarchy` h
+      where
+        h.tid=d.tid
+        and d.vid=2
+        and h.parent=0
+      order by
+        d.weight';
+  $res = db_query($sql);
+  while ($row = $res->fetch()) {
+    $catalogs[] = $row;
+  }
+  
+  return $catalogs;
+}
+
+/**
+ * Форма редактирования списка акций;
+ */
+function coupon_discount() {
+  
+  // рендерит шаблон и контейнер; данные запрашиваются скриптом; 
+  // используется нокаут;
+  
+  drupal_add_library('system', 'ui.datepicker');
+  
+  $path   = drupal_get_path('module', 'coupon');
+  $output = file_get_contents($path . '/templates/discount.html');
+  
+  $form['markup'] = array(
+    '#type' => 'markup',
+    '#markup' => $output
+  );
+  
+  $form['#attached']['js'] = array(
+    $path . '/js/external/knockout-2.3.0.js',
+    $path . '/js/discount.js'
+  );
+  
+  //drupal_add_library( 'system', 'ui.autocomplete' );
+  
+  return system_settings_form($form);
+}
+
+//function coupon_get_term_children( $parent, $terms, $goods ) {
+function coupon_get_term_children($parent, $terms, $level) {
+  
+  $children = array();
+  foreach ($terms as $term) {
+    if ($term['parent'] == $parent) {
+      
+      $tid = $term['tid'];
+      
+      $children[] = array(
+        'tid' => $term['tid'],
+        'level' => $level
+      );
+    }
+  }
+  
+  //$children = coupon_terms_by_parent( $parent, $terms, $goods );
+  foreach ($children as $key => $child) {
+    $children[$key]['children'] = 
+    //coupon_get_term_children( $child['tid'], $terms, $goods );
+      coupon_get_term_children($child['tid'], $terms, ++$level);
+  }
+  return $children;
+}
+
+/**
+ * Коллбек данных формы списка акций;
+ */
+function coupon_discount_data() {
+  
+  $data = array();
+  
+  $vid = variable_get('coupon_catalog_vocabulary');
+  
+  if ($vid) {
+    $catalog_field = variable_get('coupon_catalog_field');
+  }
+  else {
+    $catalog_field = '';
+  }
+  
+  $node_types = uc_product_types();
+  
+  // get data;
+  $coupon_actions         = variable_get('coupon_actions', '[]');
+  //$coupon_actions = '[]';
+  $data['coupon_actions'] = $coupon_actions;
+  
+  // Получить общий список нод, являющихся товаром ubercart;
+  $goods = array();
+  
+  $query = db_select('node', 'n');
+  
+  // каталог товара;
+  if ($catalog_field) {
+    $query->innerJoin('field_data_' . $catalog_field, 'c', 'c.entity_id = n.nid');
+  }
+  
+  // данные товара;  
+  $query->leftJoin('field_data_coupon_data', 'd', 'd.entity_id = n.nid and d.entity_type = \'node\'');
+  
+  $query->fields('n', array(
+    'nid',
+    'title'
+  ));
+  if ($catalog_field) {
+    $query->addField('c', $catalog_field . '_tid', 'tid');
+  }
+  else {
+    $query->addField('n', 'nid', 'tid');
+  }
+  $query->addField('d', 'coupon_data_value', 'data');
+  
+  // тип ноды;
+  if (count($node_types) == 1) {
+    
+    $node_type = $node_types[0];
+    $query->condition('n.type', $node_type, '=');
+  }
+  else {
+    
+    $or = db_or();
+    foreach ($node_types as $node_type) {
+      $or->condition('n.type', $node_type, '=');
+    }
+    $query->condition($or);
+  }
+  
+  $res = $query->execute();
+  while ($row = $res->fetchAssoc()) {
+    $good_data = $row['data'];
+    if (!$good_data) {
+      $good_data = '{}';
+    }
+    
+    if ($catalog_field) {
+      $tid = $row['tid'];
+    }
+    else {
+      $tid = 0;
+    }
+    
+    if (!isset($goods[$tid])) {
+      $goods[$tid] = array();
+    }
+    
+    $goods[$tid][] = array(
+      'nid' => $row['nid'],
+      'title' => $row['title'],
+      //'tid' => $row['tid'],
+      'data' => $good_data
+      //'discount_type' => $row['discount_type'],
+      //'discount_value' => $row['discount_value'],
+    );
+  }
+  
+  $data['goods'] = $goods;
+  
+  $terms = array();
+  
+  if ($catalog_field) {
+    
+    // retrieve all taxonomy terms;
+    $query = db_select('taxonomy_term_data', 'd');
+    
+    $query->leftJoin('taxonomy_term_hierarchy', 'h', 'h.tid = d.tid');
+    
+    // данные товара;  
+    $query->leftJoin('field_data_coupon_data', 'coupon_data', 'coupon_data.entity_id = d.tid and coupon_data.entity_type = \'taxonomy_term\'');
+    
+    $query->fields('d', array(
+      'tid',
+      'name'
+    ));
+    $query->addField('coupon_data', 'coupon_data_value', 'data');
+    $query->addField('h', 'parent');
+    
+    $query->condition('d.vid', $vid, '=');
+    
+    $res = $query->execute();
+    while ($row = $res->fetchAssoc()) {
+      
+      $good_data = $row['data'];
+      if (!$good_data) {
+        $good_data = '{}';
+      }
+      
+      $tid         = $row['tid'];
+      $terms[$tid] = array(
+        'tid' => $row['tid'],
+        'name' => $row['name'],
+        'parent' => $row['parent'],
+        'data' => $good_data
+      );
+    }
+    
+    // build term tree;
+    $term_tree = coupon_get_term_children(0, $terms, 1);
+  }
+  else {
+    
+    $terms = 'plain';
+    
+    $term_tree                = array(
+      0 => $terms[0]
+    );
+    $term_tree[0]['level']    = 1;
+    $term_tree[0]['children'] = array();
+    $terms                    = 'plain';
+  }
+  
+  $data['terms']     = $terms;
+  $data['term_tree'] = $term_tree;
+  
+  print json_encode($data);
+  
+  return;
+}
+
+//function coupon_parse_terms( $terms, $parsed_terms, $options ) {
+function coupon_update_terms($term_tree, &$terms, $options) {
+  
+  foreach ($term_tree as $term) {
+    
+    $tid          = $term['tid'];
+    $term_data    = $terms[$tid]['parsed_data']; //[ $rule_id ];
+    $term_options = array();
+    
+    foreach ($term_data as $rule_id => $data) {
+      
+      $inherit_discount = $data['i'];
+      
+      if ($inherit_discount) {
+        
+        $term_options[$rule_id]      = $options[$rule_id];
+        $term_options[$rule_id]['i'] = $inherit_discount;
+      }
+      else {
+        
+        $term_options[$rule_id] = array(
+          'i' => $inherit_discount,
+          't' => $data['t'],
+          'v' => intval($data['v']),
+          'min' => $data['min'],
+          'max' => $data['max']
+        );
+      }
+    }
+    
+    $terms[$tid]['parsed_data'] = $term_options;
+    
+    $item = taxonomy_term_load($tid);
+    if ($item) {
+      $value                                     = json_encode($term_options);
+      $item->coupon_data['und'][0]['value']      = $value;
+      $item->coupon_data['und'][0]['safe_value'] = $value;
+      taxonomy_term_save($item);
+    }
+    
+    if (isset($term['children']) && is_array($term['children'])) {
+      coupon_update_terms($term['children'], $terms, $term_options);
+    }
+  }
+}
+
+//todo field_coupon_action;
+function coupon_update_goods($goods_by_tid, $terms, $options = 0) {
+  
+  foreach ($goods_by_tid as $tid => $goods) {
+    foreach ($goods as $good) {
+      
+      $good_data    = $good['parsed_data'];
+      $good_options = array();
+      $good_actions = array(
+        'und' => array()
+      );
+      
+      foreach ($good_data as $rule_id => $data) {
+        
+        $inherit_discount = $data['i'];
+        
+        if ($inherit_discount) {
+          
+          if ($terms == 'plain') {
+            
+            $good_options[$rule_id] = $options[$rule_id];
+          }
+          else {
+            
+            $good_options[$rule_id] = $terms[$tid]['parsed_data'][$rule_id];
+          }
+          
+          $good_options[$rule_id]['i'] = $inherit_discount;
+        }
+        else {
+          
+          $good_options[$rule_id] = array(
+            'i' => $inherit_discount,
+            't' => $data['t'],
+            'v' => intval($data['v']),
+            'min' => $data['min'],
+            'max' => $data['max']
+          );
+        }
+        
+        if ($good_options[$rule_id]['v']) {
+          $good_actions['und'][] = array(
+            'value' => $rule_id,
+            'safe_value' => $rule_id
+          );
+        }
+      }
+      
+      $node = node_load($good['nid']);
+      if ($node) {
+        $value = json_encode($good_options);
+        
+        $node->coupon_data          = array(
+          'und' => array()
+        );
+        $node->coupon_data['und'][] = array(
+          'value' => $value
+          //'safe_value' => $value,
+        );
+        
+        $node->coupon_actions = $good_actions;
+        
+        node_save($node);
+      }
+    }
+  }
+}
+
+/**
+ * Коллбек: сохранение формы списка акций;
+ */
+function coupon_discount_save() {
+  
+  //todo: валидация;
+  
+  //todo: не разрешать сохранять правило, если перекрывает период другого правила; давать пользователю информацию, какое правило мешает сохранению и когда оно действует (период, дни недели, часы);
+  if (!isset($_POST['rules']) || !$_POST['rules']) {
+    return;
+  }
+  
+  if (!isset($_POST['term_tree']) || !$_POST['term_tree']) {
+    return;
+  }
+  
+  if (!isset($_POST['terms']) || !$_POST['terms']) {
+    return;
+  }
+  
+  if (!isset($_POST['goods']) || !$_POST['goods']) {
+    return;
+  }
+  
+  if ($_POST['terms'] == 'plain') {
+    
+    $terms     = 'plain';
+    $term_tree = 'plain';
+  }
+  else {
+    
+    $term_tree = json_decode($_POST['term_tree'], 1);
+    $terms     = json_decode($_POST['terms'], 1);
+  }
+  
+  $rules = json_decode($_POST['rules']);
+  $goods = json_decode($_POST['goods'], 1);
+  
+  //todo: validate decoded values;
+  
+  $period_keys = array();
+  for ($i = 0; $i < count($rules); $i++) {
+    $id            = $rules[$i]->id;
+    $from          = $rules[$i]->from;
+    $to            = $rules[$i]->to;
+    $period_keys[] = array(
+      'id' => $id,
+      'from' => $from,
+      'to' => $to
+    );
+  }
+  
+  // search rule intersections;
+  for ($i = 0; $i < count($rules) - 1; $i++) {
+    for ($j = $i + 1; $j < count($rules); $j++) {
+      $from1 = $rules[$i]->from;
+      $from2 = $rules[$j]->from;
+      $to1   = $rules[$i]->to;
+      $to2   = $rules[$j]->to;
+      if ($from1 <= $to2 && $to1 >= $from2) {
+        // check for day-hour intersections;
+        for ($day = 0; $day <= 7; $day++) {
+          for ($hour = 0; $hour <= 24; $hour++) {
+            $enabled1 = $rules[$i]->days[$day]->hours[$hour]->enabled;
+            $enabled2 = $rules[$j]->days[$day]->hours[$hour]->enabled;
+            if ($enabled1 && $enabled2) {
+              $msg = 'Правило "' . $rules[$i]->id . ', ' . $rules[$i]->title . '"" конфликтует с правилом "' . $rules[$j]->id . ', ' . $rules[$j]->title . '"; ' . $rules[$i]->days[$day]->name . ', ' . $hour . ' ч.';
+              print $msg;
+              return;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  $options = array();
+  for ($i = 0; $i < count($rules); $i++) {
+    
+    $id           = $rules[$i]->id;
+    $rule         = array(
+      'id' => $id,
+      'days' => $rules[$i]->days
+    );
+    $options[$id] = array(
+      't' => $rules[$i]->discount_type,
+      'v' => intval($rules[$i]->discount_value),
+      'min' => $rules[$i]->min_good_price,
+      'max' => $rules[$i]->max_good_price
+    );
+    
+    variable_set('price_rule' . $id, $rule);
+  }
+  
+  //todo: распарсить термины;
+  if ($terms !== 'plain') {
+    coupon_update_terms($term_tree, $terms, $options);
+  }
+  
+  coupon_update_goods($goods, $terms, $options);
+  
+  // save data;
+  variable_set('coupon_actions', $_POST['rules']);
+  variable_set('coupon_options_periods', $period_keys);
+  
+  // goods;
+  
+  //todo: убедиться, что каталоги наследуют скидку;
+  //todo: сохранять данные товара и перечень акций товара;
+  //акция: тип скидки, величина, брать данные каталога
+  
+  // todo: придумать способ хранения;
+  // требования:
+  // быстрое применение правила к товару; хранение нескольких правил для одного товара; 
+  // предположительно: хранение для каждого товара карты: период, день недели, час, id правила, данные; можно хранить variable_get по ключу price_options_<nid>; id правила нужно для того, чтобы удалять отключенные правила;
+  print 1;
+}
+
+// определить панель бонусов для корзины;
+function coupon_uc_checkout_pane() {
+  
+  $panes = array();
+  
+  $panes['coupon'] = array(
+    'callback' => 'coupon_pane',
+    'title' => t('Получить скидку по купону'),
+    'desc' => '',
+    'weight' => 20,
+    'process' => TRUE,
+    'collapsible' => FALSE
+  );
+  
+  return $panes;
+}
+
+/**
+ * Обработка отправки панель купонов в корзине;
+ */
+function coupon_checkout_pane_submit($form, &$form_state) {
+  
+  $form_state['rebuild'] = TRUE;
+  
+  $coupon_id = '';
+  //$no_discount = true;
+  $order     = $form_state['build_info']['args'][0];
+  
+  if ($form_state && isset($form_state['input']) && isset($form_state['input']['panes']) && isset($form_state['input']['panes']['coupon'])) {
+    
+    $data = $form_state['input']['panes']['coupon'];
+    
+    if (isset($data['coupon_id']) && $data['coupon_id']) {
+      $coupon_id = $data['coupon_id'];
+    }
+  }
+  
+  if (!$coupon_id) {
+    $form_state['coupon'] = 'NO_COUPON_ID';
+  }
+  
+  if ($coupon_id) {
+    
+    $ch  = curl_init();
+    $url = 'http://api.watch-and-get.com/api/v1/coupon/check?unique_key=' . urlencode($coupon_id);
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+    
+    $response  = curl_exec($ch);
+    $err       = curl_error($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    
+    if ($err) {
+      
+      //todo: watchdog;
+      $form_state['coupon'] = 'INVALID_API_RESPONCE';
+    }
+    elseif ($http_code != 200) {
+      
+      $form_state['coupon'] = 'INVALID_API_RESPONCE';
+    }
+    else {
+      
+      $response = json_decode($response, 1);
+      if (!isset($response['response'])) {
+        $form_state['coupon'] = 'INVALID_API_RESPONCE';
+        //return;
+      }
+      else {
+        $form_state['coupon'] = $response['response'];
+      }
+    }
+  }
+  
+  $action = coupon_get_current_action();
+  
+  $no_coupon = empty($form_state['coupon']) || $form_state['coupon'] !== 'OK';
+  
+  //$no_coupon = false; // ***
+  
+  if ($no_coupon || !$action) {
+    
+    $result = db_query("SELECT line_item_id FROM {uc_order_line_items} WHERE order_id = :id AND type = :type", array(
+      ':id' => $order->order_id,
+      ':type' => 'coupon_discount'
+    ));
+    
+    if ($lid = $result->fetchField()) {
+      uc_order_delete_line_item($lid);
+    }
+    return;
+  }
+  
+  $label    = t('Скидка по купону');
+  $type     = 'uc_cart_item';
+  $total    = 0;
+  $discount = 0;
+  $data     = array(
+    'coupon_id' => $coupon_id,
+    'items' => array()
+  );
+  
+  foreach ($order->products as $item) {
+    
+    $discount_item = round($item->sell_price * $item->qty);
+    $discounted_price = coupon_get_modified_price($type, $action, 0, $item);
+    $discount_item -= $discounted_price;
+    if ( $discounted_price ) {
+      $discount += $discount_item;
+    }
+    
+    $data['items'][$item->nid] = $discount_item;
+  }
+  $discount = -$discount;
+  $data     = json_encode($data);
+  
+  $result = db_query("SELECT line_item_id FROM {uc_order_line_items} WHERE order_id = :id AND type = :type", array(
+    ':id' => $order->order_id,
+    ':type' => 'coupon_discount'
+  ));
+  
+  if ($lid = $result->fetchField()) {
+    uc_order_update_line_item($lid, $label, $discount, $data);
+  }
+  else {
+    uc_order_line_item_add($order->order_id, 'coupon_discount', $label, $discount, NULL, $data);
+  }
+}
+
+// панель бонусов: показывает остаток бонусов и позволяет выбрать сумму,Ю кратную 500, для оплаты текущего заказа;
+function coupon_pane($op, $order, $form = NULL, &$form_state = NULL) {
+  
+  switch ($op) {
+    case 'view':
+      
+      if ($form_state && isset($form_state['coupon'])) {
+        
+        switch ($form_state['coupon']) {
+          case 'COUPON_EXPIRED':
+            
+            $contents['coupon_error'] = array(
+              '#type' => 'markup',
+              '#markup' => '<div class="coupon-error coupon-expired">' . t('Купон просрочен') . '</div>',
+              '#weight' => 0
+            );
+            break;
+          
+          case 'WRONG_CODE':
+            $contents['coupon_error'] = array(
+              '#type' => 'markup',
+              '#markup' => '<div class="coupon-error coupon-wrong-id">' . t('Неправильно указан номер купона') . '</div>',
+              '#weight' => 0
+            );
+            break;
+          
+          case 'NO_COUPON_ID':
+            $contents['coupon_error'] = array(
+              '#type' => 'markup',
+              '#markup' => '<div class="coupon-error coupon-no-id">' . t('Не указан номер купона') . '</div>',
+              '#weight' => 0
+            );
+            break;
+          
+          case 'INVALID_API_RESPONCE':
+            $contents['coupon_error'] = array(
+              '#type' => 'markup',
+              '#markup' => '<div class="coupon-error coupon-api-error">' . t('Извините, сервис временно не доступен') . '</div>',
+              '#weight' => 0
+            );
+            break;
+          
+          case 'COUPON_USED':
+            $contents['coupon_error'] = array(
+              '#type' => 'markup',
+              '#markup' => '<div class="coupon-error coupon-used">' . t('Купон уже использован!') . '</div>',
+              '#weight' => 0
+            );
+            break;
+          
+          default:
+            break;
+        }
+      }
+      
+      $coupon_id_title = t('Укажите номер купона');
+      
+      if ($form_state && isset($form_state['coupon']) && $form_state['coupon'] == 'OK' && isset($form_state['input']) && isset($form_state['input']['panes']) && isset($form_state['input']['panes']['coupon'])) {
+        
+        $data = $form_state['input']['panes']['coupon'];
+        
+        if (isset($data['coupon_id']) && $data['coupon_id']) {
+          
+          $markup = t('Предоставлена скидка по купону №') . $data['coupon_id'];
+          $markup = '<div class="coupon-ok">' . $markup . '</div>';
+          
+          $contents['coupon_info'] = array(
+            '#type' => 'markup',
+            '#markup' => $markup,
+            '#weight' => 0
+          );
+          
+          $coupon_id_title = t('Вы можете указать другой номер купона');
+        }
+      }
+      
+      
+      $contents['coupon_id'] = array(
+        '#type' => 'textfield',
+        '#title' => $coupon_id_title,
+        //'#size' => 60, 
+        //'#maxlength' => 128, 
+        //'#required' => TRUE,
+        '#weight' => 10
+      );
+      
+      $contents['coupon_button'] = array(
+        '#type' => 'submit',
+        '#value' => t('Получить скидку'),
+        '#submit' => array(
+          'coupon_checkout_pane_submit'
+        ),
+        '#weight' => 20,
+        '#ajax' => array(
+          'effect' => 'slide',
+          'progress' => array(
+            'type' => 'bar',
+            'message' => t('Проверяю номер купона...')
+          )
+        ),
+        // Shipping quotes can be retrieved even if the form doesn't validate.
+        '#limit_validation_errors' => array()
+      );
+      
+      return array(
+        'contents' => $contents,
+        'next-button' => FALSE
+      );
+      break;
+    
+    case 'prepare':
+    case 'process':
+      return TRUE;
+      
+      break;
+  }
+}
+
+// add field 'bonus' to entity 'uc_cart_item';
+function coupon_entity_view($entity, $type, $view_mode, $langcode) {
+  
+  if ($type !== 'uc_cart_item' && $type !== 'uc_order_product') {
+    return;
+  }
+  
+  $action = coupon_get_current_action();
+  if (!$action) {
+    return;
+  }
+  
+  $item_total = coupon_get_modified_price($type, $action, 0, $entity);
+  
+  //$total = round( $entity->content['#total'] );
+  //$bonus_value = round( $total * $percent / 100 );
+  $coupon_value = $item_total;
+  if ($coupon_value) {
+    //$coupon = $coupon_value . ' руб';
+    $coupon = '$' . $coupon_value . '.00';
+    ;
+  }
+  else {
+    $coupon = '—';
+  }
+  
+  $entity->content['coupon'] = array(
+    '#type' => 'markup',
+    '#markup' => $coupon,
+    '#value' => $coupon_value,
+    '#cell_attributes' => array(
+      'class' => array(
+        0 => 'coupon'
+      )
+    )
+  );
+}
+
+function coupon_get_modified_price($type, $action, $nid, $node, 
+  $return_discount = 0) {
+  
+  //todo nodes and cart items;
+  if (!$node) {
+    
+    $nid = intval($nid);
+    if (!$nid) {
+      return;
+    }
+    
+    $node = node_load($nid);
+    
+    if (!$node) {
+      return;
+    }
+    
+    $type = 'node';
+  }
+  
+  if  ($type == 'node') {
+    
+    $price     = round($node->sell_price);
+    $qty       = 1;
+    $good_data = $node->coupon_data;
+    
+    $item_total = $price * $qty;
+    
+    if (isset($good_data['und']) && isset($good_data['und'][0]) && isset($good_data['und'][0]['value'])) {
+      
+      $good_data = $good_data['und'][0]['value'];
+    }
+    else {
+      return;
+    }
+    
+    $good_data = json_decode($good_data, 1);
+    $action_id = $action['id'];
+    
+    if (!$good_data || !is_array($good_data)) {
+      return;
+    }
+    
+    if (!$action_id || !isset($good_data[$action_id])) {
+      return;
+    }
+    
+    $good_data = $good_data[$action_id];
+    
+    if (!isset($good_data['t']) || !isset($good_data['v']) || !isset($good_data['min']) || !isset($good_data['max'])) {
+      
+      return;
+    }
+    
+    $discount_value = intval($good_data['v']);
+    if (!$discount_value) {
+      return;
+    }
+    
+    $discount_type = $good_data['t'];
+    $min           = intval($good_data['min']);
+    $max           = intval($good_data['max']);
+    
+    if (($min && $price < $min) || ($max && $price > $max)) {
+      
+      return;
+    }
+    
+    /*if ($discount_type == 'percent') {
+      $discount_value = round($item_total * $discount_value / 100);
+    }*/
+
+    
+    if ( $return_discount ) {
+
+      if ($discount_type == 'sum') {
+        $discount_value .= ' р.';
+      }
+      elseif ($discount_type == 'percent') {
+        $discount_value .= '%';
+      }
+      else {
+        $discount_value = '';
+      }
+
+      return $discount_value;
+    } else {
+
+      $item_total -= $discount_value;
+      return $item_total;    
+    }
+  }
+  elseif ($type == 'uc_cart_item') {
+    
+    //$node = $node['#entity'];
+    $price     = round($node->sell_price);
+    $qty       = intval($node->qty);
+    $good_data = $node->coupon_data;
+    
+    $item_total = $price * $qty;
+    
+    if (isset($good_data['und']) && isset($good_data['und'][0]) && isset($good_data['und'][0]['value'])) {
+      
+      $good_data = $good_data['und'][0]['value'];
+    }
+    else {
+      return;
+    }
+    
+    $good_data = json_decode($good_data, 1);
+    $action_id = $action['id'];
+    
+    if (!$good_data || !is_array($good_data)) {
+      return;
+    }
+    
+    if (!$action_id || !isset($good_data[$action_id])) {
+      return;
+    }
+    
+    $good_data = $good_data[$action_id];
+    
+    if (!isset($good_data['t']) || !isset($good_data['v']) || !isset($good_data['min']) || !isset($good_data['max'])) {
+      
+      return;
+    }
+    
+    $discount_value = intval($good_data['v']);
+    if (!$discount_value) {
+      return;
+    }
+    
+    $discount_type = $good_data['t'];
+    $min           = intval($good_data['min']);
+    $max           = intval($good_data['max']);
+    
+    if (($min && $price < $min) || ($max && $price > $max)) {
+      
+      return;
+    }
+    
+    if ($discount_type == 'percent') {
+      $discount_value = round($item_total * $discount_value / 100);
+    } else {
+      $discount_value *= $qty;
+    }
+    
+    $item_total -= $discount_value;
+    return $item_total;    
+  }
+  elseif ($type == 'uc_order_product') {
+    
+    $items = $node->order->line_items;
+    foreach ($items as $item) {
+      if ($item['type'] == 'coupon_discount') {
+        
+        $nid  = $node->nid;
+        $data = json_decode($item['data'], 1);
+        if (!isset($data['items']) || !isset($data['items'][$nid])) {
+          return '—';
+        }
+        $amount = round($data['items'][$nid]);
+        return $amount;
+      }
+    }
+    return;
+  }
+}
+
+// add field 'bonus' to tapir table 'uc_cart_view_table';
+function coupon_tapir_table_alter(&$table, $table_id) {
+  
+  if ($table_id !== 'uc_cart_view_table' && $table_id !== 'uc_op_products_view_table') {
+    return;
+  }
+  
+  //$action = coupon_get_current_action( true );
+  $action = coupon_get_current_action();
+  
+  if (!$action) {
+    return;
+  }
+  
+  $children    = element_children($table);
+  $total_index = count($children) - 1;
+  
+  $total_sum = 0;
+  foreach ($children as $key) {
+    
+    if ($key == $total_index) {
+      continue;
+    }
+    
+    $item = $table[$key];
+    
+    if ( $item['coupon']['#value'] ) {
+      $item_total = $item['coupon']['#value'];
+    } else {
+      $item_total = $item['#total'];
+    }
+
+    $total_sum += $item_total;
+  }
+  
+  if ($total_sum) {
+    //$total_sum .= ' руб';
+    $total_sum = '$' . $total_sum . '.00';
+  }
+  else {
+    $total_sum = '—';
+  }
+  
+  if ($table_id == 'uc_cart_view_table') {
+    $cell_caption = 'С использованием купона';
+  }
+  elseif ($table_id == 'uc_op_products_view_table') {
+    $cell_caption = 'Скидка по купону';
+  }
+  
+  
+  $total_sum = '<span class="coupon-value">' . $total_sum . '</span>';
+  
+  $table['#columns']['coupon'] = array(
+    'cell' => $cell_caption,
+    'weight' => 50
+  );
+  
+  $table[] = array(
+    '#prefix' => '<div class="coupon-sum"><span id="coupon-title">Сумма при покупке по купону: </span>',
+    '#type' => 'markup',
+    '#suffix' => '</div>',
+    '#markup' => $total_sum,
+    '#cell_attributes' => array(
+      'class' => array(
+        0 => 'coupon-value'
+      )
+    )
+  );
+}
+
+/**
+ * Implements hook_uc_line_item().
+ */
+//function coupon_uc_line_item() {
+function coupon_uc_line_item() {
+  $items['coupon_discount'] = array(
+    'title' => t('Скидка по купону'),
+    'weight' => 1,
+    //'callback'
+    'default' => FALSE,
+    'stored' => TRUE,
+    'calculated' => TRUE,
+    'display_only' => FALSE,
+    'add_list' => TRUE
+  );
+  return $items;
+}
+
+function coupon_uc_order($op, $order, $arg2) {
+  
+  if ($op == 'submit') {
+    
+    $coupon_id = '';
+    
+    foreach ($order->line_items as $item) {
+      
+      if ($item['type'] == 'coupon_discount') {
+        
+        if (isset($item['data'])) {
+          
+          $data = json_decode($item['data'], 1);
+          
+          if (isset($data['coupon_id'])) {
+            $coupon_id = $data['coupon_id'];
+          }
+        }
+        
+        $amount = intval($item['amount']);
+        if ($amount && !$coupon_id) {
+          
+          return array(
+            array(
+              'pass' => FALSE,
+              'message' => t('Не удалось погасить купон: не указан номер купона.')
+            )
+          );
+        }
+      }
+    }
+    
+    if (!$coupon_id) {
+      return;
+    }
+
+    $login = variable_get('coupon_login');
+    $pass = variable_get('coupon_pass');
+
+    if ( !$login || !$pass ) {
+
+      $msg = 'Сервис предоставления скидок по купонам отключен.';
+      return array(
+        array(
+          'pass' => FALSE,
+          'message' => t($msg)
+        )
+      );
+    }
+    
+    $ch      = curl_init();
+    $url     = 'http://api.watch-and-get.com/api/v1/coupon/use';
+    $params  = array(
+      'unique_key' => $coupon_id
+    );
+    //$encoded = urlencode('unique_key') . '=' . urlencode( $coupon_id );
+    $encoded = http_build_query($params);
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $encoded);
+    
+    curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+    //todo: вынести в настройки;
+    curl_setopt($ch, CURLOPT_USERPWD, $login . ':' . $pass ); // "user:1"
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+    
+    $response  = curl_exec($ch);
+    $err       = curl_error($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    
+    $result = '';
+    
+    if ($err) {
+      
+      //todo: watchdog;
+      $result = 'INVALID_API_RESPONCE';
+    }
+    elseif ($http_code != 200) {
+      
+      $result = 'INVALID_API_RESPONCE';
+    }
+    else {
+      
+      $response = json_decode($response, 1);
+      if (!isset($response['response'])) {
+        $result = 'INVALID_API_RESPONCE';
+        //return;
+      }
+      else {
+        $result = $response['response'];
+      }
+    }
+    
+    //$result = 'OK'; // ***
+    switch ($result) {
+      case 'INVALID_API_RESPONCE':
+        $msg = 'Извините, сервис предоставления скидок по купонам временно недоступен';
+        break;
+      
+      case 'WRONG_CODE':
+        $msg = 'Указан неправильный номер купона';
+        break;
+      
+      case 'COUPON_USED':
+        $msg = 'Указанный вами купон уже использован';
+        break;
+      
+      case 'COUPON_EXPIRED':
+        $msg = 'Указанный вами купон просрочен';
+        break;
+      
+      default:
+        # code...
+        break;
+    }
+    
+    if ($result != 'OK') {
+      
+      return array(
+        array(
+          'pass' => FALSE,
+          'message' => t($msg)
+        )
+      );
+    }
+  }
+}
+
+function taxonomy_update_goods($tid, $coupon_data) {
+  
+  $nids = taxonomy_select_nodes($tid);
+  foreach ($nids as $nid) {
+    
+    $node = node_load($nid);
+    if (!isset($node->coupon_data) || !isset($node->coupon_data['und']) || !isset($node->coupon_data['und'][0]) || !isset($node->coupon_data['und'][0]['value'])) {
+      continue;
+    }
+    
+    $good_data = $node->coupon_data['und'][0]['value'];
+    $good_data = json_decode($good_data, 1);
+    
+    if (!is_array($good_data)) {
+      continue;
+    }
+    
+    foreach ($good_data as $rule_id => $data) {
+      
+      if (intval($good_data[$rule_id]['i'])) {
+        
+        $good_data[$rule_id]['t']   = $coupon_data[$rule_id]['t'];
+        $good_data[$rule_id]['v']   = $coupon_data[$rule_id]['v'];
+        $good_data[$rule_id]['min'] = $coupon_data[$rule_id]['min'];
+        $good_data[$rule_id]['max'] = $coupon_data[$rule_id]['max'];
+        
+        $encoded                              = json_encode($good_data);
+        $node->coupon_data['und'][0]['value'] = $encoded;
+        node_save($node);
+      }
+    }
+  }
+}
+
+function taxonomy_update_children($tid, $coupon_data) {
+  
+  taxonomy_update_goods($tid, $coupon_data);
+  $children = taxonomy_get_children($tid);
+  foreach ($children as $child) {
+    
+    if (!isset($child->coupon_data) || !isset($child->coupon_data['und']) || !isset($child->coupon_data['und'][0]) || !isset($child->coupon_data['und'][0]['value'])) {
+      return;
+    }
+    
+    $tid               = $child->tid;
+    $child_coupon_data = $child->coupon_data['und'][0]['value'];
+    $child_coupon_data = json_decode($child_coupon_data, 1);
+    
+    if (!is_array($child_coupon_data)) {
+      return;
+    }
+    
+    $inherited_data = array();
+    foreach ($coupon_data as $rule_id => $data) {
+      
+      if (intval($child_coupon_data[$rule_id]['i'])) {
+        
+        $child_coupon_data[$rule_id]['t']   = $data['t'];
+        $child_coupon_data[$rule_id]['v']   = $data['v'];
+        $child_coupon_data[$rule_id]['min'] = $data['min'];
+        $child_coupon_data[$rule_id]['max'] = $data['max'];
+        
+        $inherited_data[$rule_id] = $data;
+      }
+      
+    }
+    
+    if (count($inherited_data)) {
+      
+      $child->coupon_data['und'][0]['value'] = json_encode($child_coupon_data);
+      taxonomy_term_save($child);
+      
+      //taxonomy_update_goods( $tid, $inherited_data );
+      taxonomy_update_children($tid, $inherited_data);
+    }
+    
+    
+    
+  }
+}
+
+function coupon_taxonomy_form_submit($form, &$form_state) {
+  
+  $tid = $form['#term']['tid'];
+  $tid = intval($tid);
+  if (!$tid) {
+    return;
+  }
+  
+  if (!isset($form['#term']) || !isset($form['#term']['coupon_data']) || !isset($form['#term']['coupon_data']['und']) || !isset($form['#term']['coupon_data']['und'][0]) || !isset($form['#term']['coupon_data']['und'][0]['value'])) {
+    return;
+  }
+  
+  $coupon_data = $form['#term']['coupon_data']['und'][0]['value'];
+  $coupon_data = json_decode($coupon_data, 1);
+  
+  if (!is_array($coupon_data)) {
+    return;
+  }
+  
+  taxonomy_update_children($tid, $coupon_data);
+  //taxonomy_get_children
+}
+
+function coupon_form_uc_cart_view_form_alter(&$form, &$form_state, $form_id) {
+  
+  $rule = coupon_get_current_action(0, 1);
+  if (!$rule) {
+    return;
+  }
+  
+  $rule_id = $rule['id'];
+  
+  $coupon_actions = variable_get('coupon_actions', '[]');
+  $coupon_actions = json_decode($coupon_actions);
+  
+  if (!is_array($coupon_actions) || !isset($coupon_actions[$rule_id])) {
+    return;
+  }
+  
+  $markup = '<div class="coupon-action-info">' . $coupon_actions[$rule_id]->descr . '</div>';
+  
+  $dialog_title   = variable_get('coupon_info_title', 'Информация о скидочной программе');
+  $dialog_content = variable_get('coupon_info');
+  
+  if ($dialog_content) {
+    
+    $markup .= '<a class="coupon-info" href="#">Подробнее о программе</a>';
+    $markup .= '<div id="coupon-dialog" title="' . $dialog_title . '">' . $dialog_content . '</div>';
+    
+    $path                    = drupal_get_path('module', 'coupon') . '/js/popup.js';
+    $form['#attached']['js'] = array(
+      $path => array(
+        'type' => 'file'
+      )
+    );
+    
+    $form['#attached']['library'][] = array(
+      'system',
+      'ui.dialog'
+    );
+  }
+  
+  $form['coupon-action-info'] = array(
+    '#type' => 'markup',
+    '#markup' => $markup
+  );
+  
+}
+
+function coupon_form_alter(&$form, &$form_state, $form_id) {
+  
+  $node_types = uc_product_types();
+  $vid        = variable_get('coupon_catalog_vocabulary');
+  
+  // редактирование термина таксономии;
+  if ($form_id == 'taxonomy_form_term') {
+    if ($form['#term']['vid'] != $vid) {
+      return;
+    }
+    
+    array_unshift($form['#submit'], 'coupon_taxonomy_form_submit');
+    
+    $template = 'discount_term.html';
+    $script   = 'discount_term.js';
+  }
+  else {
+    
+    // редактирование ноды;
+    $found = 0;
+    if (!$found) {
+      
+      foreach ($node_types as $type) {
+        
+        if ($form_id == $type . '_node_form') {
+          $found = 1;
+          break;
+        }
+      }
+    }
+    
+    if (!$found) {
+      return;
+    }
+    
+    $template = 'discount_good.html';
+    $script   = 'discount_good.js';
+  }
+  
+  
+  // подключить шаблон нокаута;
+  $path   = drupal_get_path('module', 'coupon');
+  $output = file_get_contents($path . '/templates/' . $template);
+  
+  //
+  if ($vid) {
+    
+    $catalog_field          = variable_get('coupon_catalog_field');
+    $catalog_field_selector = str_replace('_', '-', $catalog_field);
+  }
+  else {
+    
+    $catalog_field_selector = '';
+  }
+  
+  global $base_path;
+  $coupon_actions = variable_get('coupon_actions', '[]');
+  $coupon_actions = urlencode($coupon_actions);
+  
+  $output .= '<div id="coupon-data" ' . 'data-catalog-field-selector="' . $catalog_field_selector . '" data-base-path="' . $base_path . '" data-actions="' . $coupon_actions . '"></div>';
+  
+  $form['coupon-markup'] = array(
+    '#type' => 'markup',
+    '#markup' => $output
+  );
+  
+  if (!isset($form['#attached'])) {
+    $form['#attached'] = array();
+  }
+  
+  if (!isset($form['#attached']['js'])) {
+    $form['#attached']['js'] = array();
+  }
+  
+  $form['#attached']['js'][] = $path . '/js/external/knockout-2.3.0.js';
+  $form['#attached']['js'][] = $path . '/js/' . $script;
+}
+
+function coupon_node_view_alter(&$build) {
+  
+  return;
+  
+  if ($build['#entity_type'] != 'node') {
+    return;
+  }
+  
+  $node_types = uc_product_types();
+  $found      = 0;
+  foreach ($node_types as $type) {
+    if ($build['#bundle'] == $type) {
+      $found = 1;
+      break;
+    }
+  }
+  
+  if (!$found) {
+    return;
+  }
+}
+
+function coupon_catalog_options($tid) {
+  
+  $tid = intval($tid);
+  if (!$tid) {
+    return;
+  }
+  
+  $vid = variable_get('coupon_catalog_vocabulary');
+  if (!$vid) {
+    return;
+  }
+  
+  $catalog_field = variable_get('coupon_catalog_field');
+  if (!$catalog_field) {
+    return;
+  }
+  
+  $catalog_field = '';
+  
+  $query = db_select('field_data_coupon_data', 'd');
+  $query->addField('d', 'coupon_data_value', 'data');
+  $query->condition('d.entity_type', 'taxonomy_term', '=');
+  $query->condition('d.entity_id', $tid, '=');
+  $res = $query->execute();
+  $row = $res->fetchAssoc();
+  
+  if ($row) {
+    print $row['data'];
+  }
+}
+
+function coupon_theme($existing, $type, $theme, $path) {
+  return array(
+    'field__coupon_data' => array(
+      'function' => 'coupon_theme_coupon_field'
+    )
+  );
+}
+
+function coupon_theme_coupon_field($variables) {
+  
+  $action = coupon_get_current_action();
+  if (!$action) {
+    return ' ';
+  }
+  
+  $node = $variables['element']['#object'];
+  /*
+  if (!isset($node->coupon_data) || !isset($node->coupon_data['und']) || !isset($node->coupon_data['und'][0]) || !isset($node->coupon_data['und'][0]['value'])) {
+    return ' ';
+  }
+  
+  $data = $node->coupon_data['und'][0]['value'];
+  $data = json_decode($data, 1);
+  if (!is_array($data)) {
+    return ' ';
+  }
+  
+  $rule_id = $action['id'];
+  if (!isset($data[$rule_id])) {
+    return ' ';
+  }
+  
+  $type  = $data[$rule_id]['t'];
+  $value = $data[$rule_id]['v'];
+  
+  if ($type == 'sum') {
+    $value = $value . ' р.';
+  }
+  elseif ($type == 'percent') {
+    $value = $value . '%';
+  }
+  else {
+    $value = '';
+  }
+  */
+  
+  $return_discount = 1;
+  $value = coupon_get_modified_price('node', $action, 0, $node, 
+    $return_discount);
+
+  if ($value) {
+    $info = '<div class="coupon-discount"><span class="caption">' . 'Скидка по купону: ' . '</span><span class="value">' . $value . '</span></div>';
+  }
+  else {
+    $info = '<div class="coupon-no-discount"></div>';
+  }
+  
+
+  return $info;
+}

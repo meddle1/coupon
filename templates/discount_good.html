@@ -1,0 +1,70 @@
+<!-- Основной шаблон -->
+<script type="text/html" id="coupon-good-template">
+
+	<table class="goods">
+		<thead>
+			<tr>
+				<th class="title">Акция</th>
+
+				<!-- ko if: !$root.catalogs -->
+				<th class="inherit">Использовать скидку по умолч.</th>
+				<!-- /ko -->
+
+				<!-- ko if: $root.catalogs -->
+				<th class="inherit">Использовать данные каталога</th>
+				<!-- /ko -->
+
+				<th>Вид скидки</th>
+				<th>Размер скидки</th>
+				<th>Мин. цена</th>
+				<th>Макс. цена</th>
+				<!--<th>Предоставлена скидка</th>-->
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			<!-- ko foreach: rules -->
+				<tr data-bind="attr: { 'class': 'rule-' + id() }">
+					
+					<td class="rule-title" data-bind="text: title">
+					</td>
+
+					<td class="discount-inherit">
+						<input type="checkbox" data-bind="checked: data.i,
+						event: {
+							change: $root.on_inherit_change.bind( $root, $data )
+						}" />
+					</td>
+
+					<td class="discount-type">
+						<select
+				            data-bind="
+				            	options: $root.discount_types, 
+					            optionsText: function (item) {return item.name; },
+					            optionsValue: function (item) {return item.id; },
+					            value: data.t,
+								enable: !data.i()">
+					    </select>
+					</td>
+
+					<td class="discount-value">
+						<input class="value" data-bind="
+							value: data.v,
+							enable: !data.i()" />
+					</td>				
+
+					<td class="discount-min-price" data-bind="text: data.min">
+					</td>				
+
+					<td class="discount-max-price" data-bind="text: data.max">
+					</td>				
+
+					<!--<td class="discount-result" data-bind="text: $root.discount_info.bind( $root, $data )()">
+					</td>-->
+					<td class="discount-remove"><a data-bind="click: $root.remove_discount">Убрать скидку</a>
+					</td>
+				</tr>
+			<!-- /ko -->
+		</tbody>
+	</table>
+</script>

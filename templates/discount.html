@@ -1,0 +1,366 @@
+<!-- Форма редактирования списка акций -->
+
+<!-- Основной шаблон -->
+<script type="text/html" id="coupon-discount-template">
+
+	<h2 class="rules-title" data-bind="text: 'Настройка скидок по акциям'"></h2>
+
+	<div class="buttons-wrapper">
+		
+		<div class="button add-form" data-bind="click: $root.add_rule.bind($root)">Добавить акцию</div>
+
+		<div class="button save" data-bind="click: $root.save.bind($root)">Сохранить изменения</div>
+	</div>
+
+	<div class="rule-select-wrapper">
+		<span class="caption">Выберите акцию: </span>
+		<select
+	        data-bind="
+	        	options: rules, 
+	            optionsText: function (item) {return 'id' + item.id() + ', ' 
+	            	+ item.title(); },
+	            optionsValue: function (item) {return item.id(); },
+	            value: rule,
+	            event: { change: $root.select_rule }">
+	    </select>
+   	</div>
+
+   	<div class="rule-wrapper">
+   	</div>
+</script>
+
+<!-- Шаблон правила -->
+<script type="text/html" id="coupon-rule-template">
+
+	<!-- ko with: rules()[ rule_id ] -->
+
+		<div class="rule">
+
+			<h2 class="rule-title" data-bind="text: 'Акция: №' + id() + ', ' + title(),
+				click: $root.toggle_rule"></h2>
+
+			<div class="button remove-rule" data-bind="click: $root.remove_rule.bind($root, id())">Удалить акцию</div>
+
+			<div class="field rule-title">
+				<div class="label">Название акции</div>
+				<input class="value" data-bind="value: title" />
+			</div>
+
+			<div class="field rule-descr">
+				<div class="label">Описание</div>
+				<textarea class="value" data-bind="value: descr"></textarea>
+			</div>
+
+			<div class="field rule-title">
+				<div class="label">Срок действия</div>
+				<div class="rule-period" data-bind="rangeDatePicker: { from: from, to: to }"></div>
+			</div>
+
+			<a href="#" data-bind="event: { click: $root.show_time_table.bind( $root ) }">Расписание</a>
+
+			<a href="#" data-bind="event: { click: $root.show_discounts.bind( $root ) }">Скидки</a>
+		</div>
+    <!-- /ko -->
+	
+	<div class="rule-data"></div>
+	<div class="rule-data-goods"></div>
+</script>
+
+<!-- Шаблон расписания -->
+<script type="text/html" id="coupon-time-table-template">
+	
+	<!-- ko with: rules()[ rule_id ] -->
+
+		<div class="time-schedule">
+	
+			<h2 class="time-schedule-title" >Расписание</h2>
+			<a href="#" class="toggle-block" data-bind="click: $root.toggle_block">Показать</a>
+		
+			<div class="days-of-week">
+				<!-- ko foreach: days -->
+				<div class="day-of-week">
+
+					<div class="field-day day-of-week-enabled">
+						<div class="label" data-bind="text: name"></div>
+						<input class="value" type="checkbox" data-bind="checked: enabled" />
+					</div>
+
+					<div class="hours">
+						<!-- ko foreach: hours -->
+						<div class="field-day day-of-week-hour">
+							<div class="label" data-bind="text: $index"></div>
+							<input class="value" type="checkbox" data-bind="checked: enabled, enable: $parent.enabled" />
+						</div>
+						<!-- /ko -->
+					</div>
+
+				</div>
+				<!-- /ko -->
+			</div>
+		</div>
+	<!-- /ko -->
+</script>
+
+<!-- Шаблон скидок -->
+<script type="text/html" id="coupon-discounts-template">
+
+	<!-- ko with: rules()[ rule_id ] -->
+
+		<div class="options">
+			<h2 class="price-terms-title" >Скидки и наценки по умолчанию</h2>
+			<div class="field term-discount-type">
+				<div class="label">Тип</div>
+				<select
+		            data-bind="
+		            	options: $root.discount_types, 
+			            optionsText: function (item) {return item.name; },
+			            optionsValue: function (item) {return item.id; },
+			            value: discount_type,
+						event: { 'change': $root.update_children.bind( $root, { 
+							tid: 0, 
+							children: $root.term_tree, 
+							options: { 
+								t: discount_type,
+								v: discount_value,
+								min: min_good_price,
+								max: max_good_price,
+						} }, id() ) }">
+			    </select>
+			</div>
+
+			<div class="field term-discount-value">
+				<div class="label">Величина</div>
+				<input class="value" data-bind="value: discount_value,
+				event: { 'change': $root.update_children.bind( $root, { 
+					tid: 0, 
+					children: $root.term_tree, 
+					options: { 
+						t: discount_type,
+						v: discount_value,
+						min: min_good_price,
+						max: max_good_price,
+				} }, id() ) }" />
+			</div>
+
+			<div class="field term-min-good-price">
+				<div class="label">Мин. цена товара</div>
+				<input class="value" data-bind="value: min_good_price" />
+			</div>
+
+			<div class="field term-max-good-price">
+				<div class="label">Макс. цена товара</div>
+				<input class="value" data-bind="value: max_good_price" />
+			</div>
+		</div>
+
+		<!-- ko if: $root.terms == 'plain' -->
+		<!--<h2 class="price-terms-title" >Скидки и наценки по товарам</h2>-->
+		<!-- /ko -->
+
+		<!-- ko if: $root.terms != 'plain' -->
+		<h2 class="price-terms-title" >Скидки и наценки по каталогам</h2>
+		<!-- /ko -->
+
+		<!-- ko if: $root.terms == 'plain' -->
+		
+		<div class="price-terms" data-bind="value: $root.show_goods.bind( $root, 0, id() )()"></div>
+
+		<!--<div class="price-terms"  data-bind="template: { 
+			name: 'coupon-goods-template',
+			data: {
+				vm: $root,
+				tid: 0,
+				rule_id: id(),
+				init_good: $root.init_good,
+				//goods: $root.goods,
+			} }"></div>-->
+
+		<!-- /ko -->
+
+		<!-- ko if: $root.terms != 'plain' -->
+			<table class="terms">
+				<thead>
+					<tr>
+						<th class="title">Наименование</th>
+						<th></th>
+
+						<!-- ko if: tid == 0 -->
+						<th class="inherit">Исполь- зовать скидку по умолч.</th>
+						<!-- /ko -->
+
+						<!-- ko if: tid != 0 -->
+						<th class="inherit">Исполь- зовать данные каталога</th>
+						<!-- /ko -->
+
+						<th>Вид скидки</th>
+						<th>Размер скидки</th>
+						<th>Мин. цена</th>
+						<th>Макс. цена</th>
+					</tr>
+				</thead>
+				<tbody>
+				<!-- ko template: { name: 'coupon-terms-template',
+						data: {
+							tid: 0,
+							rule_id: id(),
+							init_good: $root.init_good,
+							terms: $root.term_tree,
+						}
+					}-->
+				<!-- /ko -->
+				</tbody>
+			</table>
+
+			<!--<div class="price-terms" data-bind="template: { 
+				name: 'coupon-terms-template', 
+				data: {
+					tid: 0,
+					rule_id: id(),
+					init_good: $root.init_good,
+					terms: $root.term_tree,
+				}
+			}"></div>-->
+		<!-- /ko -->
+	<!-- /ko -->
+</script>
+
+<!-- Шаблон списка терминов -->
+<script type="text/html" id="coupon-terms-template">
+
+			<!-- ko foreach: terms -->
+			<tr>
+				<td class="term-name" data-bind="attr: { class: 'term-name level' + level }">
+					<span data-bind="text: $root.catalog_prefix( level ) + $root.terms[ tid ].name"></span>
+				</td>
+
+				<td>
+					<a href="#" data-bind="event: { 'click': $root.show_goods.bind( $root, tid, $parent.rule_id ) }">список</a>
+				</td>
+
+				<td class="discount-inherit">
+					<input type="checkbox" data-bind="checked: $root.terms[ tid ].parsed_data[ $parent.rule_id ].i,
+					attr: {'id': 'inherit-discount-' + tid},
+					event: {
+						change: $root.update_item.bind( $root, $parent.tid, $data, $parent.rule_id )
+					}" />
+				</td>
+				<td class="discount-type">
+					<select
+			            data-bind="
+			            	options: $root.discount_types, 
+				            optionsText: function (item) {return item.name; },
+				            optionsValue: function (item) {return item.id; },
+				            value: $root.terms[ tid ].parsed_data[ $parent.rule_id ].t,
+							enable: !$root.terms[ tid ].parsed_data[ $parent.rule_id ].i(),							
+							event: {
+								change: $root.update_children.bind( $root, $data, $parent.rule_id )
+							}">
+				    </select>
+				</td>
+				<td class="discount-value">
+					<input class="value" data-bind="
+						value: $root.terms[ tid ].parsed_data[ $parent.rule_id ].v,
+						enable: !$root.terms[ tid ].parsed_data[ $parent.rule_id ].i(),
+						event: {
+							change: $root.update_children.bind( $root, $data, $parent.rule_id )
+						}" />
+				</td>
+				<td class="min-price">
+					<input class="value" data-bind="value: $root.terms[ tid ].parsed_data[ $parent.rule_id ].min,
+						enable: !$root.terms[ tid ].parsed_data[ $parent.rule_id ].i(),
+						event: {
+							change: $root.update_children.bind( $root, $data, $parent.rule_id )
+						}" />
+				</td>
+				<td class="max-price">
+					<input class="value" data-bind="value: $root.terms[ tid ].parsed_data[ $parent.rule_id ].max,
+						enable: !$root.terms[ tid ].parsed_data[ $parent.rule_id ].i(),
+						event: {
+							change: $root.update_children.bind( $root, $data, $parent.rule_id )
+						}" />
+				</td>				
+			</tr>
+
+			<!-- ko if: children && children.length -->
+			<!-- ko template: { name: 'coupon-terms-template',
+					data: {
+						tid: tid,
+						rule_id: $parent.rule_id,
+						init_good: $root.init_good,
+						terms: $data.children
+					}
+				}-->
+			<!-- /ko -->
+			<!-- /ko -->
+
+			<!-- /ko -->
+</script>
+
+<!-- Шаблон списка товаров в каталоге -->
+<script type="text/html" id="coupon-goods-template">
+	
+	<!-- ko if: !tid -->	
+	<h2 data-bind="text: 'Список товаров'"></h2>
+	<!-- /ko -->
+
+	<!-- ko if: tid -->	
+	<h2 data-bind="text: $root.vm.terms[ tid ].name + ', список товаров'"></h2>
+	<!-- /ko -->
+
+	<!-- ko if: $root.vm.goods[ tid ] -->
+	<table class="goods">
+		<thead>
+			<tr>
+				<th class="title">Наименование</th>
+
+				<!-- ko if: tid == 0 -->
+				<th class="inherit">Использовать скидку по умолчанию</th>
+				<!-- /ko -->
+
+				<!-- ko if: tid != 0 -->
+				<th class="inherit">Использовать данные каталога</th>
+				<!-- /ko -->
+
+				<th>Вид скидки</th>
+				<th>Размер скидки</th>
+			</tr>
+		</thead>
+		<tbody>
+			<!-- ko foreach: $root.vm.goods[ tid ] -->
+			<tr>
+				<td data-bind="text: title"></td>
+				<td>
+					<input type="checkbox" 
+						data-bind="attr: { 'id': 'i' + $index() },
+							checked: $data.parsed_data[ $parent.rule_id ].i,
+							event: {
+								change: ( /*console.log($root), */$root.vm.update_item.bind( $root.vm, $parent.tid, $data, $parent.rule_id ) )
+							}" />
+				</td>
+				<td>
+					<select data-bind="
+		            	options: $root.vm.discount_types, 
+			            optionsText: function (item) {return item.name; },
+			            optionsValue: function (item) {return item.id; },
+			            value: $data.parsed_data[ $parent.rule_id ].t,
+			            enable: !$data.parsed_data[ $parent.rule_id ].i()">
+				    </select>
+				</td>
+				<td>
+					<input data-bind="
+						value: $data.parsed_data[ $parent.rule_id ].v,
+						enable: !$data.parsed_data[ $parent.rule_id ].i()" />
+
+				</td>
+			</tr>
+			<!-- /ko -->
+		</tbody>
+	</table>
+	<!-- /ko -->
+	<!-- ko if: !$root.vm.goods[ tid ] -->
+	<div clas="no-goods">Товары не найдены</div>
+	<!-- /ko -->
+</script>
+
+<div id="coupon-discount-container"></div>
+<div id="coupon-discount-container1"></div>

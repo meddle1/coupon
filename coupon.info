@@ -1,0 +1,7 @@
+name = Купоны
+description = Предоставление скидок по купонам
+package = Other
+core = 7.x
+files[] = coupon.module
+stylesheets[all][] = css/coupon.css
+dependencies[] = uc_cart

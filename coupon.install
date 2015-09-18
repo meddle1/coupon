@@ -1,0 +1,41 @@
+<?php
+
+function coupon_requirements( $phase ) {
+
+  $requirements = array();
+
+  if ( $phase == 'install' ) {
+
+    /*$info = field_info_field_types('text');
+    if ( $info ) {
+      $info = field_info_field_types('list_text');
+    }*/
+
+    $info = field_info_field_types('text_long');
+    if ( $info ) {
+      return $requirements;
+    }
+
+    $module_name = $module_name = basename(__FILE__, '.install');
+    $requirements['coupon'] = array(
+      'title' => 'field_types',
+      'description' => 'Для работы модуля "' . $module_name 
+        . '" требуется тип поля "текст длинный"',
+      'severity' => REQUIREMENT_ERROR,
+    );
+  }
+
+  return $requirements;
+}
+
+function coupon_enable() {
+  //notify('coupon_enable');
+  coupon_add_fields();
+}
+
+function coupon_uninstall() {
+
+  /*field_delete_field('coupon_discount_type');
+  field_delete_field('coupon_discount_value');*/
+  field_delete_field('coupon_data');
+}

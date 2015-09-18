@@ -1,0 +1,273 @@
+form#coupon-discount .day-of-week {
+  width: 70px;
+  float: left;
+  border: 1px solid gray;
+  margin-right: 10px;
+}
+
+form#coupon-discount .day-of-week .field-day.day-of-week-enabled {
+  border-bottom: 1px solid gray;
+  padding-left: 10px;
+}
+
+form#coupon-discount .day-of-week .field-day.day-of-week-enabled .label {
+  float: left;
+}
+
+form#coupon-discount .day-of-week .field-day.day-of-week-hour {
+  padding-left: 10px;
+}
+
+form#coupon-discount .day-of-week .field-day.day-of-week-hour .label {
+  float: left;
+}
+
+form#coupon-discount .time-schedule {
+  overflow: auto;
+  clear: both;
+  margin-bottom: 25px;
+}
+
+form#coupon-discount .price-terms .term-name.level1 {
+  background-color: lightgreen;
+  padding: 5px;
+}
+
+form#coupon-discount .price-terms .term-name.level2 {
+  background-color: lightgreen;
+  padding: 5px;
+  padding-left: 50px;
+}
+
+form#coupon-discount .price-terms .term-name.level3 {
+  background-color: lightgreen;
+  padding: 5px;
+  padding-left: 100px;
+}
+
+form#coupon-discount .price-terms .term-name.level4 {
+  background-color: lightgreen;
+  padding: 5px;
+  padding-left: 150px;
+}
+
+form#coupon-discount .price-terms .options {
+  padding: 15px 0;
+}
+
+form#coupon-discount .rule,
+form#coupon-discount .price-terms,
+form#coupon-discount .days-of-week {
+  /*display: none;*/
+  clear: both;
+}
+
+form#coupon-discount .rule-wrapper {
+  clear: both;
+}
+
+form#coupon-discount .rule {
+  margin-bottom: 25px;
+  background-color: #EAEAEA;
+  padding: 25px;
+  border-radius: 7px;
+  float: left;
+  margin-right: 10px;  
+}
+
+form#coupon-discount .rule-data {
+  width: 665px;
+  float: left;
+  max-height: 400px;
+  /*overflow: scroll;*/
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+form#coupon-discount .rule-data-goods {
+  /*float: right;*/
+  overflow: auto;
+  min-height: 400px;
+  /*min-width: 665px;*/
+  width: 100%;
+  margin-right: 20px;
+  /*background-color: gray;*/
+}
+
+form#coupon-discount .rule-data .options {
+  overflow: auto;
+  margin-bottom: 40px;
+}
+
+form#coupon-discount .rule-data .options .field {
+  clear: none;
+  margin-top: 0;
+  float: left;
+  margin-right: 10px;
+}
+
+form#coupon-discount .rule-data .options .field .label {
+  width: auto;
+  margin-right: 5px;
+}
+
+form#coupon-discount .rule-data .options .field.term-discount-value input {
+  width: 100px;
+}
+
+form#coupon-discount .rule-data .options .field.term-min-good-price input,
+form#coupon-discount .rule-data .options .field.term-max-good-price input {
+  width: 130px;
+}
+
+form#coupon-discount .rule-data table.terms th.title {
+  width: 200px;
+}
+
+form#coupon-discount .rule-data table.terms th.term-name {
+  max-width: 200px;
+}
+
+form#coupon-discount .rule-data table.terms th.inherit,
+form#coupon-discount .rule-data table.terms td.discount-value input,
+form#coupon-discount .rule-data table.terms td.min-price input,
+form#coupon-discount .rule-data table.terms td.max-price input {
+  max-width: 50px;
+}
+
+form#coupon-discount .field .label {
+  font-weight: bold;
+}
+
+form#coupon-discount #coupon-discount-container1 {
+  overflow: auto;
+  /*max-height: 400px;*/
+}
+
+form#coupon-discount .field input.value,
+form#coupon-discount .field textarea.value {
+  padding: 2px;
+  border: 1px solid #ccc;
+  border-top-color: #999;
+  background: #fff;
+  color: #333;
+}
+
+form#coupon-discount .rule {
+  width: 300px;
+}
+
+form#coupon-discount .field input.hasDatepicker {
+  width: 65px;
+  padding: 0 10px;
+}
+
+form#coupon-discount .field.rule-title input.value {
+  width: 300px;
+}
+
+form#coupon-discount .field.rule-descr textarea {
+  width: 300px;
+  height: 70px;
+}
+
+form#coupon-discount a.toggle-block {
+  padding-top: 10px;
+  display: block;
+}
+
+form#coupon-discount h2 {
+  font-size: 1.12em;
+  margin-bottom: 20px;
+  margin-top: 10px;
+}
+
+
+form#coupon-discount .field {
+  clear: both;
+  margin-top: 20px;  
+}
+
+
+form#coupon-discount .field .label {
+  width: 350px;
+  margin-right: 5px;  
+}
+
+form#coupon-discount input#edit-submit {
+  display: none;
+}
+
+
+form#coupon-discount .button {
+  border: 1px solid gray;
+  width: 200px;
+  padding: 5px;
+  border-radius: 6px;
+  background-color: #BABABA;
+  text-align: center;
+  cursor: pointer;
+}
+
+form#coupon-discount .buttons-wrapper,
+form#coupon-discount .rule-select-wrapper {
+  overflow: auto;
+  margin-bottom: 25px;
+}
+
+form#coupon-discount .button.add-form {
+  /*margin-top: 30px;*/
+  float: left;
+}
+
+form#coupon-discount .button.save {
+  /*margin-top: 30px;*/
+  float: left;
+  margin-left: 15px;
+}
+
+form#coupon-discount .rule-select-wrapper span.caption {
+  font-size: 1.077em;
+  font-family: "Lucida Grande", Verdana, sans-serif;
+}
+
+form#coupon-discount .rule-select-wrapper select {
+  font-size: 1.077em;
+  font-family: "Lucida Grande", Verdana, sans-serif;
+}
+
+table.goods {
+  /*margin-left: 195px;*/
+  margin-bottom: 30px;
+  width: 800px;
+}
+
+table.goods th.title {
+  min-width: 300px;
+}
+
+table.goods th.inherit {
+  min-width: 80px;
+}
+
+/* Hide coupon fields in nodes and taxonomy terms */
+form .field-name-coupon-data, form .field-name-coupon-actions {
+  display: none;
+}
+
+/* cart */
+#uc-cart-view-form .coupon-sum {
+  text-align: right;
+  margin-bottom: 20px;
+  margin-top: -20px;
+  font-size: 0.857em;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+#uc-cart-view-form .coupon-sum #coupon-title {
+  font-weight: bold;
+}
+
+form table .discount-remove {
+  cursor: pointer;
+}
